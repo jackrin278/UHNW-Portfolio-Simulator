@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import matplotlib.ticker as ticker
 import matplotlib.pyplot as plt
 
 # --- 1. Website Design ---
@@ -22,12 +23,12 @@ for life in range(simulations):
     portfolio_history = [starting_money]
     
     for year in range(30):
-        # Using conservative targets for a realistic model
-        ret_pub_eq = random.gauss(0.07, 0.15)     
-        ret_muni = random.gauss(0.04, 0.05)       
-        ret_pe = random.gauss(0.10, 0.18)         
-        ret_pcredit = random.gauss(0.07, 0.06)    
-        ret_hedge = random.gauss(0.05, 0.05)      
+        # Hardcoded with J.P. Morgan 2026 LTCMA Projections
+        ret_pub_eq = random.gauss(0.067, 0.15)     
+        ret_muni = random.gauss(0.040, 0.05)       
+        ret_pe = random.gauss(0.103, 0.19)         
+        ret_pcredit = random.gauss(0.076, 0.07)    
+        ret_hedge = random.gauss(0.041, 0.06)
         
         total_return = (0.35 * ret_pub_eq) + (0.20 * ret_muni) + \
                        (0.20 * ret_pe) + (0.15 * ret_pcredit) + \
@@ -58,4 +59,6 @@ ax.set_ylabel("Account Balance ($)")
 ax.set_xlabel("Years in Retirement")
 
 # This tells Streamlit to draw the chart on the webpage
+# Format the Y-axis to show millions (e.g., $50M)
+ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'${x*1e-6:,.0f}M'))
 st.pyplot(fig)
