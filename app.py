@@ -23,7 +23,6 @@ w_pe = st.sidebar.number_input("Private Equity", value=20) / 100
 w_pcredit = st.sidebar.number_input("Private Credit", value=15) / 100
 w_hedge = st.sidebar.number_input("Hedge Funds", value=10) / 100
 
-# --- NEW: CUSTOM SCENARIO OVERLAY ---
 st.sidebar.header("3. Custom Stress Test (Red Line)")
 show_custom = st.sidebar.checkbox("Plot Custom Scenario Overlay")
 c_eq = st.sidebar.number_input("Custom Equity Return (%)", value=-2.0) / 100
@@ -77,8 +76,15 @@ for life in range(simulations):
     curr_w_muni = w_muni
     
     for year in range(30):
-        if random.random() < 0.15:
-            regime = 1 - regime 
+        
+        # --- FIXED ASYMMETRIC REGIME SHIFT ---
+        if regime == 0:
+            if random.random() < 0.15:  # 15% chance a normal market crashes
+                regime = 1
+        else:
+            if random.random() < 0.80:  # 80% chance a crashed market recovers
+                regime = 0
+        # -------------------------------------
             
         current_mu = mu_shock if regime == 1 else mu_normal
         current_L = L_shock if regime == 1 else L_normal
@@ -129,7 +135,6 @@ if show_custom:
     c_money = starting_money
     c_withdrawal = initial_withdrawal
     
-    # Calculate the exact blended return based on your custom inputs
     c_taxable_return = (w_eq * c_eq) + (w_pe * c_pe) + (w_pcredit * c_pcredit) + (w_hedge * c_hedge)
     c_after_tax = c_taxable_return * (1 - tax_rate)
     c_total_return = c_after_tax + (w_muni * c_muni)
