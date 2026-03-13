@@ -59,7 +59,7 @@ L_shock = np.linalg.cholesky(corr_shock)
 vols = np.array([0.15, 0.05, 0.19, 0.07, 0.06])
 
 starting_money = 50000000
-simulations = 500
+simulations = 5000
 success_count = 0
 terminal_values = []
 
