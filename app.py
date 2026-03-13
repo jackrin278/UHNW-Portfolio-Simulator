@@ -6,7 +6,7 @@ import matplotlib.ticker as ticker
 
 st.set_page_config(page_title="UHNW Simulator", layout="wide")
 st.title("UHNW Portfolio Simulator: Institutional Quant Model")
-st.write("Engine upgraded with Regime-Dependent Correlation Matrices. Simulates inflation shocks where bonds fail as an equity hedge.")
+st.write("Engine upgraded with Regime-Dependent Correlation Matrices and a Custom Deterministic Scenario Overlay.")
 
 # --- SIDEBAR CONTROLS ---
 st.sidebar.header("1. Client Profile")
@@ -23,31 +23,37 @@ w_pe = st.sidebar.number_input("Private Equity", value=20) / 100
 w_pcredit = st.sidebar.number_input("Private Credit", value=15) / 100
 w_hedge = st.sidebar.number_input("Hedge Funds", value=10) / 100
 
-st.sidebar.header("3. Advanced Institutional Logic")
+# --- NEW: CUSTOM SCENARIO OVERLAY ---
+st.sidebar.header("3. Custom Stress Test (Red Line)")
+show_custom = st.sidebar.checkbox("Plot Custom Scenario Overlay")
+c_eq = st.sidebar.number_input("Custom Equity Return (%)", value=-2.0) / 100
+c_muni = st.sidebar.number_input("Custom Muni Return (%)", value=1.0) / 100
+c_pe = st.sidebar.number_input("Custom PE Return (%)", value=5.0) / 100
+c_pcredit = st.sidebar.number_input("Custom Credit Return (%)", value=4.0) / 100
+c_hedge = st.sidebar.number_input("Custom Hedge Return (%)", value=2.0) / 100
+
+st.sidebar.header("4. Advanced Institutional Logic")
 glide_path = st.sidebar.checkbox("Glide Path: Shift 1% Equity to Munis Annually")
 
 # --- QUANTITATIVE ENGINE SETUP ---
-# Regime 0: Normal / Growth Fears
 mu_normal = np.array([0.067, 0.040, 0.103, 0.076, 0.041])
 corr_normal = np.array([
-    [ 1.00, -0.30,  0.60,  0.40,  0.50],  # Equities
-    [-0.30,  1.00, -0.10,  0.20, -0.10],  # Munis (HEDGE WORKS)
-    [ 0.60, -0.10,  1.00,  0.50,  0.40],  # PE
-    [ 0.40,  0.20,  0.50,  1.00,  0.30],  # Private Credit
-    [ 0.50, -0.10,  0.40,  0.30,  1.00]   # Hedge Funds
+    [ 1.00, -0.30,  0.60,  0.40,  0.50],  
+    [-0.30,  1.00, -0.10,  0.20, -0.10],  
+    [ 0.60, -0.10,  1.00,  0.50,  0.40],  
+    [ 0.40,  0.20,  0.50,  1.00,  0.30],  
+    [ 0.50, -0.10,  0.40,  0.30,  1.00]   
 ])
 L_normal = np.linalg.cholesky(corr_normal)
 
-# Regime 1: Inflation Shock / Rate Hikes
 mu_shock = np.array([-0.150, -0.050, -0.050, 0.020, -0.020])
 corr_shock = np.array([
-    [ 1.00,  0.40,  0.60,  0.40,  0.50],  # Equities
-    [ 0.40,  1.00, -0.10,  0.20, -0.10],  # Munis (HEDGE FAILS! Positive correlation)
-    [ 0.60, -0.10,  1.00,  0.50,  0.40],  # PE
-    [ 0.40,  0.20,  0.50,  1.00,  0.30],  # Private Credit
-    [ 0.50, -0.10,  0.40,  0.30,  1.00]   # Hedge Funds
+    [ 1.00,  0.40,  0.60,  0.40,  0.50],  
+    [ 0.40,  1.00, -0.10,  0.20, -0.10],  
+    [ 0.60, -0.10,  1.00,  0.50,  0.40],  
+    [ 0.40,  0.20,  0.50,  1.00,  0.30],  
+    [ 0.50, -0.10,  0.40,  0.30,  1.00]   
 ])
-# Adding a tiny amount of mathematical regularization to ensure the matrix is stable
 corr_shock = corr_shock + np.eye(5) * 0.0001
 L_shock = np.linalg.cholesky(corr_shock)
 
@@ -60,6 +66,7 @@ terminal_values = []
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
+# 1. Run the standard Monte Carlo simulation
 for life in range(simulations):
     current_money = starting_money
     current_withdrawal = initial_withdrawal
@@ -70,7 +77,6 @@ for life in range(simulations):
     curr_w_muni = w_muni
     
     for year in range(30):
-        # 1. Markov Regime Shift (15% chance to hit an Inflation Shock)
         if random.random() < 0.15:
             regime = 1 - regime 
             
@@ -78,7 +84,6 @@ for life in range(simulations):
         current_L = L_shock if regime == 1 else L_normal
         current_inflation = inflation_rate + 0.04 if regime == 1 else inflation_rate
         
-        # 2. Glide Path
         if glide_path:
             shift = min(curr_w_eq, 0.01)
             curr_w_eq -= shift
@@ -87,12 +92,10 @@ for life in range(simulations):
         weights = np.array([curr_w_eq, curr_w_muni, w_pe, w_pcredit, w_hedge])
         weights = weights / np.sum(weights)
 
-        # 3. Fat Tails & Dynamic Regime Correlation
         independent_shocks = np.random.standard_t(df=5, size=5)
         correlated_shocks = current_L @ independent_shocks
         asset_returns = current_mu + (vols * correlated_shocks)
         
-        # 4. Tax Drag Logic
         after_tax_returns = asset_returns.copy()
         after_tax_returns[0] *= (1 - tax_rate) 
         after_tax_returns[2] *= (1 - tax_rate) 
@@ -101,11 +104,10 @@ for life in range(simulations):
         
         total_return = np.dot(weights, after_tax_returns)
         
-        # 5. Financial Math
         current_money = current_money * (1 + total_return)
         current_money -= current_withdrawal
         current_money *= (1 - aum_fee)
-        current_withdrawal *= (1 + current_inflation) # Inflation spikes during shocks!
+        current_withdrawal *= (1 + current_inflation) 
         
         if current_money < 0:
             current_money = 0
@@ -120,6 +122,29 @@ for life in range(simulations):
         
     if life < 100:
         ax.plot(portfolio_history, color='purple', alpha=0.1)
+
+# 2. OVERLAY THE CUSTOM DETERMINISTIC LINE
+if show_custom:
+    custom_history = [starting_money]
+    c_money = starting_money
+    c_withdrawal = initial_withdrawal
+    
+    # Calculate the exact blended return based on your custom inputs
+    c_taxable_return = (w_eq * c_eq) + (w_pe * c_pe) + (w_pcredit * c_pcredit) + (w_hedge * c_hedge)
+    c_after_tax = c_taxable_return * (1 - tax_rate)
+    c_total_return = c_after_tax + (w_muni * c_muni)
+    
+    for year in range(30):
+        c_money = c_money * (1 + c_total_return)
+        c_money -= c_withdrawal
+        c_money *= (1 - aum_fee)
+        c_withdrawal *= (1 + inflation_rate)
+        if c_money < 0:
+            c_money = 0
+        custom_history.append(c_money)
+        
+    ax.plot(custom_history, color='red', linewidth=3, label=f"Custom Fixed Return: {c_total_return*100:.2f}%")
+    ax.legend()
 
 # --- RESULTS & DISPLAY ---
 success_rate = (success_count / simulations) * 100
@@ -139,7 +164,5 @@ col3.metric("Best Case (90th %ile)", f"${p90_terminal*1e-6:,.1f}M")
 ax.set_ylabel("Account Balance")
 ax.set_xlabel("Years in Retirement")
 ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'${x*1e-6:,.0f}M'))
-ax.axhline(y=legacy_target, color='red', linestyle='--', alpha=0.5, label="Legacy Target")
-ax.legend()
 ax.grid(True, alpha=0.3)
 st.pyplot(fig)
