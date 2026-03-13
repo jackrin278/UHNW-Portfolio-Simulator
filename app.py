@@ -3,7 +3,9 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
-
+# Lock the random dice so we can isolate variables without variance
+random.seed(42)
+np.random.seed(42)
 st.set_page_config(page_title="UHNW Simulator", layout="wide")
 st.title("UHNW Portfolio Simulator: Institutional Quant Model")
 st.write("Engine upgraded with Regime-Dependent Correlation Matrices and a Custom Deterministic Scenario Overlay.")
